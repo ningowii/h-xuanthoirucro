@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Đọc Truyện Bảo Mật</title>
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --text-color: #2b2b2b;
+            --box-bg: #ffffff;
+            --font-size: 18px;
+            --font-family: 'Times New Roman', Times, serif;
+        }
+
+        /* Chống quét khối text bằng CSS */
+        body {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Thanh công cụ cài đặt giao diện */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--box-bg);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .toolbar button, .toolbar select {
+            padding: 6px 12px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #fff;
+            border-radius: 4px;
+        }
+
+        /* Khung nhập mật khẩu */
+        .auth-box {
+            background: var(--box-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        .auth-box input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .auth-box button {
+            padding: 10px 25px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        /* Khung nội dung truyện */
+        .content-box {
+            display: none;
+            background: var(--box-bg);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            line-height: 1.6;
+            font-size: var(--font-size);
+            position: relative; /* Để làm nền cho Watermark */
+            overflow: hidden;
+        }
+
+        .story-title {
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .story-text {
+            white-space: pre-line; /* Giữ nguyên xuống dòng từ Sheet */
+            text-align: justify;
+        }
+
+        /* Kỹ thuật chống chụp ảnh màn hình bằng Watermark Động */
+        .watermark-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Không cản trở click chuột chuột */
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            opacity: 0.06; /* Độ mờ vừa đủ để thấy khi chụp màn hình nhưng không gây tức mắt khi đọc */
+            font-size: 20px;
+            font-weight: bold;
+            color: #000;
+            transform: rotate(-25deg);
+            user-select: none;
+        }
+
+        .watermark-item {
+            padding: 50px 10px;
+            text-align: center;
+        }
+
+        .loading { display: none; color: #666; margin-top: 10px; }
+    </style>
+</head>
+<body oncontextmenu="return false;" onkeydown="return false;">
+
+<div class="container">
+
+    <div class="toolbar">
+        <button onclick="window.location.reload()">🏠 Trang Chủ</button>
+        <div>
+            <select id="selectChuong" onchange="chuyenChuong()">
+                <option value="chuong_01">Chương 1</option>
+                <option value="chuong_02">Chương 2</option>
+            </select>
+            <select id="selectFont" onchange="doiFont(this.value)">
+                <option value="'Times New Roman', serif">Times New Roman</option>
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="'Courier New', monospace">Courier New</option>
+            </select>
+            <button onclick="doiSize(1)">A+</button>
+            <button onclick="doiSize(-1)">A-</button>
+            <button onclick="doiNen()">🌓 Màu Nền</button>
+        </div>
+    </div>
+
+    <div id="authBox" class="auth-box">
+        <h3 id="labelChuong">VUI LÒNG NHẬP PASS ĐỂ ĐỌC</h3>
+        <input type="text" id="taiKhoan" placeholder="Nhập chính xác Tên Tài Khoản của bạn">
+        <input type="password" id="passCode" placeholder="Nhập Mật khẩu được cấp (Hạn 15 phút)">
+        <br>
+        <button onclick="yeuCauDocTruyen()">VÀO ĐỌC TRUYỆN</button>
+        <div id="loadingText" class="loading">Đang xác thực bảo mật và tải truyện...</div>
+    </div>
+
+    <div id="contentBox" class="content-box">
+        <div id="storyTitle" class="story-title"></div>
+        <hr>
+        <div id="storyText" class="story-text"></div>
+        
+        <div id="watermarkLayer" class="watermark-overlay"></div>
+    </div>
+
+</div>
+
+<script>
+    // ⚠️ ĐIỀN ĐƯỜNG LINK WEB APP APPS SCRIPT CỦA BẠN VÀO ĐÂY
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw_0ncgxSmxndWkcRg3oEy60eXX5BqnlE5rWblZJlAGZvYjFnVMvpPlOW7UjdB19SsBCg/exec";
+
+    let currentFontSize = 18;
+    let isDarkMode = false;
+
+    // 1. Hàm Thay đổi Font chữ
+    function doiFont(fontName) {
+        document.documentElement.style.setProperty('--font-family', fontName);
+    }
+
+    // 2. Hàm Thay đổi Kích thước chữ
+    function doiSize(giazTri) {
+        currentFontSize += giazTri;
+        if(currentFontSize < 14) currentFontSize = 14;
+        if(currentFontSize > 30) currentFontSize = 30;
+        document.documentElement.style.setProperty('--font-size', currentFontSize + 'px');
+    }
+
+    // 3. Hàm Thay đổi Màu nền (Sáng / Tối / Giấy cũ)
+    function doiNen() {
+        if (!isDarkMode) {
+            // Chuyển sang chế độ ban đêm
+            document.documentElement.style.setProperty('--bg-color', '#121212');
+            document.documentElement.style.setProperty('--text-color', '#cecece');
+            document.documentElement.style.setProperty('--box-bg', '#1e1e1e');
+            isDarkMode = true;
+        } else {
+            // Quay về nền sáng
+            document.documentElement.style.setProperty('--bg-color', '#f4f4f9');
+            document.documentElement.style.setProperty('--text-color', '#2b2b2b');
+            document.documentElement.style.setProperty('--box-bg', '#ffffff');
+            isDarkMode = false;
+        }
+    }
+
+    // Khi người đọc chọn đổi chương khác trên giao diện
+    function chuyenChuong() {
+        // Ẩn nội dung cũ đi, bắt nhập pass lại theo đúng logic của bạn
+        document.getElementById("contentBox").style.display = "none";
+        document.getElementById("authBox").style.display = "block";
+        document.getElementById("passCode").value = "";
+        document.getElementById("labelChuong").innerText = "NHẬP PASS CHO " + document.getElementById("selectChuong").value.toUpperCase();
+    }
+
+    // 4. GỬI REQUEST LÊN GOOGLE SHEET KIỂM TRA BẢO MẬT
+    function yeuCauDocTruyen() {
+        const tk = document.getElementById("taiKhoan").value.trim();
+        const mk = document.getElementById("passCode").value.trim();
+        const chuong = document.getElementById("selectChuong").value;
+
+        if(!tk || !mk) {
+            alert("Vui lòng điền đầy đủ Tài khoản và Mật mã.");
+            return;
+        }
+
+        document.getElementById("loadingText").style.display = "block";
+
+        // Tạo gói dữ liệu dạng JSON gửi lên Apps Script
+        const payload = {
+            taiKhoan: tk,
+            pass: mk,
+            idChuong: chuong
+        };
+
+        fetch(SCRIPT_URL, {
+            method: "POST",
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            document.getElementById("loadingText").style.display = "none";
+            
+            if(result.status === "success") {
+                // Hiển thị nội dung truyện
+                document.getElementById("authBox").style.display = "none";
+                document.getElementById("contentBox").style.display = "block";
+                document.getElementById("storyTitle").innerText = result.title;
+                document.getElementById("storyText").innerText = result.content;
+
+                // Tự động tạo Watermark mang tên tài khoản của chính người đó để răn đe chụp màn hình
+                taoWatermarkDong(tk);
+            } else {
+                alert("Từ chối truy cập: " + result.message);
+            }
+        })
+        .catch(err => {
+            document.getElementById("loadingText").style.display = "none";
+            alert("Lỗi kết nối tới Server Backend.");
+            console.error(err);
+        });
+    }
+
+    // Tự động tạo 15 nhãn Watermark mờ chạy ẩn dưới chữ truyện
+    function taoWatermarkDong(username) {
+        const layer = document.getElementById("watermarkLayer");
+        layer.innerHTML = ""; // Xóa watermark cũ
+        for (let i = 0; i < 15; i++) {
+            const item = document.createElement("div");
+            item.className = "watermark-item";
+            item.innerText = username;
+            layer.appendChild(item);
+        }
+    }
+
+    // 5. NÂNG CAO: CHẶN CÁC PHÍM CHỨC NĂNG (F12, Ctrl+Shift+I, v.v...)
+    // Hàm này ghi đè toàn bộ tổ hợp phím để bảo mật tối đa text.
+    window.addEventListener('keydown', function(e) {
+        // Chặn F12
+        if (e.keyCode == 123) { e.preventDefault(); return false; }
+        // Chặn Ctrl+Shift+I, Ctrl+Shift+C, Ctrl+Shift+J
+        if (e.ctrlKey && e.shiftKey && (e.keyCode == 73 || e.keyCode == 67 || e.keyCode == 74)) { e.preventDefault(); return false; }
+        // Chặn Ctrl+U (Xem code), Ctrl+S (Lưu trang), Ctrl+C (Copy), Ctrl+A (Chọn tất cả)
+        if (e.ctrlKey && (e.keyCode == 85 || e.keyCode == 83 || e.keyCode == 67 || e.keyCode == 65)) { e.preventDefault(); return false; }
+    }, false);
+</script>
+
+</body>
+</html>
